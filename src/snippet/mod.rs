@@ -220,7 +220,7 @@ fn search_fragments(
                 // Naively limit how many fragments we search through, or this operation can get too
                 // expensive.
                 count += 1;
-                if count > 5 {
+                if count > 2 {
                     return fragments;
                 }
             };
