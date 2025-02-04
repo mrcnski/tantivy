@@ -211,11 +211,20 @@ fn search_fragments(
     let mut token_stream = tokenizer.token_stream(text);
     let mut fragment = FragmentCandidate::new(0);
     let mut fragments: Vec<FragmentCandidate> = vec![];
+    let mut count = 0;
     while let Some(next) = token_stream.next() {
         if (next.offset_to - fragment.start_offset) > max_num_chars {
             if fragment.score > 0.0 {
-                fragments.push(fragment)
+                fragments.push(fragment);
+
+                // Naively limit how many fragments we search through, or this operation can get too
+                // expensive.
+                count += 1;
+                if count > 5 {
+                    return fragments;
+                }
             };
+
             fragment = FragmentCandidate::new(next.offset_from);
         }
         fragment.try_add_token(next, terms);
