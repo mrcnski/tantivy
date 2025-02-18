@@ -68,6 +68,7 @@ use crate::tokenizer::{TextAnalyzer, Token};
 use crate::{Score, Searcher, Term};
 
 const DEFAULT_MAX_NUM_CHARS: usize = 150;
+const DEFAULT_MAX_NUM_FRAGMENTS: usize = 10;
 
 const DEFAULT_SNIPPET_PREFIX: &str = "<b>";
 const DEFAULT_SNIPPET_POSTFIX: &str = "</b>";
@@ -207,6 +208,7 @@ fn search_fragments(
     text: &str,
     terms: &BTreeMap<String, Score>,
     max_num_chars: usize,
+    max_num_fragments: usize,
 ) -> Vec<FragmentCandidate> {
     let mut token_stream = tokenizer.token_stream(text);
     let mut fragment = FragmentCandidate::new(0);
@@ -220,7 +222,7 @@ fn search_fragments(
                 // Naively limit how many fragments we search through, or this operation can get too
                 // expensive.
                 count += 1;
-                if count > 2 {
+                if count > max_num_fragments {
                     return fragments;
                 }
             };
@@ -388,6 +390,7 @@ pub struct SnippetGenerator {
     tokenizer: TextAnalyzer,
     field: Field,
     max_num_chars: usize,
+    max_num_fragments: usize,
 }
 
 impl SnippetGenerator {
@@ -397,12 +400,14 @@ impl SnippetGenerator {
         tokenizer: TextAnalyzer,
         field: Field,
         max_num_chars: usize,
+        max_num_fragments: usize,
     ) -> Self {
         SnippetGenerator {
             terms_text,
             tokenizer,
             field,
             max_num_chars,
+            max_num_fragments,
         }
     }
     /// Creates a new snippet generator
@@ -437,12 +442,18 @@ impl SnippetGenerator {
             tokenizer,
             field,
             max_num_chars: DEFAULT_MAX_NUM_CHARS,
+            max_num_fragments: DEFAULT_MAX_NUM_FRAGMENTS,
         })
     }
 
     /// Sets a maximum number of chars. Default is 150.
     pub fn set_max_num_chars(&mut self, max_num_chars: usize) {
         self.max_num_chars = max_num_chars;
+    }
+
+    /// Sets a maximum number of fragments to search when generating a snippet.
+    pub fn set_max_num_fragments(&mut self, max_num_fragments: usize) {
+        self.max_num_fragments = max_num_fragments;
     }
 
     #[cfg(test)]
@@ -478,6 +489,7 @@ impl SnippetGenerator {
             text,
             &self.terms_text,
             self.max_num_chars,
+            self.max_num_fragments,
         );
         select_best_fragment_combination(&fragment_candidates[..], text)
     }
@@ -522,6 +534,7 @@ Survey in 2016, 2017, and 2018."#;
             TEST_TEXT,
             &terms,
             100,
+            10,
         );
         assert_eq!(fragments.len(), 7);
         {
@@ -554,6 +567,7 @@ Survey in 2016, 2017, and 2018."#;
                 TEST_TEXT,
                 &terms,
                 20,
+                10,
             );
             {
                 let first = &fragments[0];
@@ -573,6 +587,7 @@ Survey in 2016, 2017, and 2018."#;
                 TEST_TEXT,
                 &terms,
                 20,
+                10,
             );
             // assert_eq!(fragments.len(), 7);
             {
@@ -592,8 +607,13 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("c"), 1.0);
 
-        let fragments =
-            search_fragments(&mut From::from(SimpleTokenizer::default()), text, &terms, 3);
+        let fragments = search_fragments(
+            &mut From::from(SimpleTokenizer::default()),
+            text,
+            &terms,
+            3,
+            3,
+        );
 
         assert_eq!(fragments.len(), 1);
         {
@@ -615,8 +635,13 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("f"), 1.0);
 
-        let fragments =
-            search_fragments(&mut From::from(SimpleTokenizer::default()), text, &terms, 3);
+        let fragments = search_fragments(
+            &mut From::from(SimpleTokenizer::default()),
+            text,
+            &terms,
+            3,
+            3,
+        );
 
         assert_eq!(fragments.len(), 2);
         {
@@ -639,8 +664,13 @@ Survey in 2016, 2017, and 2018."#;
         terms.insert(String::from("f"), 1.0);
         terms.insert(String::from("a"), 0.9);
 
-        let fragments =
-            search_fragments(&mut From::from(SimpleTokenizer::default()), text, &terms, 7);
+        let fragments = search_fragments(
+            &mut From::from(SimpleTokenizer::default()),
+            text,
+            &terms,
+            7,
+            3,
+        );
 
         assert_eq!(fragments.len(), 2);
         {
@@ -662,8 +692,13 @@ Survey in 2016, 2017, and 2018."#;
         let mut terms = BTreeMap::new();
         terms.insert(String::from("z"), 1.0);
 
-        let fragments =
-            search_fragments(&mut From::from(SimpleTokenizer::default()), text, &terms, 3);
+        let fragments = search_fragments(
+            &mut From::from(SimpleTokenizer::default()),
+            text,
+            &terms,
+            3,
+            3,
+        );
 
         assert_eq!(fragments.len(), 0);
 
@@ -678,8 +713,13 @@ Survey in 2016, 2017, and 2018."#;
         let text = "a b c d";
 
         let terms = BTreeMap::new();
-        let fragments =
-            search_fragments(&mut From::from(SimpleTokenizer::default()), text, &terms, 3);
+        let fragments = search_fragments(
+            &mut From::from(SimpleTokenizer::default()),
+            text,
+            &terms,
+            3,
+            3,
+        );
         assert_eq!(fragments.len(), 0);
 
         let snippet = select_best_fragment_combination(&fragments[..], text);
@@ -793,6 +833,7 @@ Survey in 2016, 2017, and 2018."#;
             text,
             &terms,
             3,
+            3,
         );
 
         assert_eq!(fragments.len(), 1);
@@ -816,6 +857,7 @@ Survey in 2016, 2017, and 2018."#;
             TEST_TEXT,
             &terms,
             100,
+            10,
         );
         let mut snippet = select_best_fragment_combination(&fragments[..], TEST_TEXT);
         assert_eq!(
